@@ -21,6 +21,6 @@ main(int argc, char *argv[])
 	}
 	printf("Server socket opened, port = %d\nserver_fd = %d\nAccepting Cons.\n", port, server_fd);
 	client = accept(server_fd, (struct sockaddr *) &address, (socklen_t *) &addrlen);
-	printf("%s\n", bmsg);
+	printf("Sending message: %s\n", msg);
 	send(client, bmsg, strlen(bmsg), 0);
 }

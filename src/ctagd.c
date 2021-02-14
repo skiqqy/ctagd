@@ -6,24 +6,17 @@
 
 static int max_clients;
 
-static int
-bytes_to_int(char *bytes)
+/* I didnt feel like working with bytes, leave me alone owo */
+static int base_10(int n)
 {
-	return bytes[0] + (bytes[1] << 8) + (bytes[2] << 16) + (bytes[3] << 24);
-}
-
-static char *
-int_to_bytes(int i)
-{
-	char *bytes = malloc(sizeof(char)*4); // We add a null terminator
-	int j;
-	for (j = 3; j >= 0; j--) {
-		bytes[j] = (i >> 4 * i) & 0xFF;
+	int c = 0;
+	while (n > 0) {
+		n /= 10;
+		c++;
 	}
-	printf("TESTING: %d=?=%d\n", i, bytes_to_int(bytes));
-	return bytes;
-}
 
+	return c;
+}
 
 /* The master opens its socket to allow clients to communicate
   
@@ -124,11 +117,8 @@ pack(struct smsg *msg)
 {
 	if (msg == NULL) return NULL;
 	char *bmsg = malloc(sizeof(char)*msg->len + 5); /* first byte = tag, next 4 bytes = len */
-	char *len = int_to_bytes(msg->len);
 	bmsg [0] = msg->tag;
-	sprintf(&bmsg[1], "%s%s", len, msg->payload);
-	printf("[PACK] %s\n", bmsg);
-	free(len);
+	sprintf(&bmsg[1], "%d%s", msg->len, msg->payload);
 	return bmsg;
 }
 
@@ -140,9 +130,8 @@ unpack(char *bmsg)
 {
 	if (bmsg == NULL) return NULL;
 	struct smsg *smsg = malloc(sizeof(struct smsg));
-	sscanf(bmsg, "%c", &smsg->tag);
-	smsg->len = bytes_to_int(&bmsg[1]);
+	sscanf(bmsg, "%c%d", &smsg->tag, &smsg->len);
 	smsg->payload = malloc(sizeof(char)*smsg->len);
-	sprintf(smsg->payload, "%s", &bmsg[5]);
+	sprintf(smsg->payload, "%s", &bmsg[1+base_10(smsg->len)]);
 	return smsg;
 }

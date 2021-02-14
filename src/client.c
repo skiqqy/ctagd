@@ -10,7 +10,7 @@ main(int argc, char *argv[])
 	char *hostname = "localhost";
 	char buff[256];
 	struct sockaddr_in address;
-	printf("TODO: Client\n");
+	printf("[CLIENT] This is a demo!\n");
 
 	/* Setup Sockets */
 	if (!slave_get_sock(port, hostname, &sock, &address)) {
