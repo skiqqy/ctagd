@@ -117,8 +117,17 @@ pack(struct smsg *msg)
 {
 	if (msg == NULL) return NULL;
 	char *bmsg = malloc(sizeof(char)*msg->len + 5); /* first byte = tag, next 4 bytes = len */
-	bmsg [0] = msg->tag;
-	sprintf(&bmsg[1], "%d%s", msg->len, msg->payload);
+	char *bint = (char*) &msg->len;
+
+	/* Pack the byte array */
+	bmsg[0] = msg->tag;
+	int i;
+	for (i = 1; i < 5; i++) {
+		bmsg[i] = bint[i-1];
+	}
+	sprintf(&bmsg[5], "%s", msg->payload);
+
+	printf("\nPACKING DONE\nTAG = |%c|\nLEN = |%d|\nPAYLOAD = |%s|\n\n", bmsg[0], *(int *) &bmsg[1], &bmsg[5]);
 	return bmsg;
 }
 
@@ -129,9 +138,14 @@ struct smsg *
 unpack(char *bmsg)
 {
 	if (bmsg == NULL) return NULL;
+
 	struct smsg *smsg = malloc(sizeof(struct smsg));
-	sscanf(bmsg, "%c%d", &smsg->tag, &smsg->len);
+	smsg->tag = bmsg[0];
+	printf("??%s\n", &bmsg[5]);
+	smsg->len = *(int *)&bmsg[1];
+	printf("TAG=%c\nLEN=%d\n", smsg->tag, smsg->len);
 	smsg->payload = malloc(sizeof(char)*smsg->len);
-	sprintf(smsg->payload, "%s", &bmsg[1+base_10(smsg->len)]);
+	sprintf(smsg->payload, "%s", &bmsg[5]);
+
 	return smsg;
 }
