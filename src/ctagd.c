@@ -188,7 +188,8 @@ crecv(int sock, struct smsg *smsg)
 	char *buff = malloc(sizeof(char)*5);
 	read(sock, buff, 5);
 	int len = *(int *) &buff[1];
-	buff = realloc(buff, sizeof(char)*len + 5);
+	buff = realloc(buff, sizeof(char)*len + 5 + 1); /* len = data length, 5 = tag + len, 1 = null term */
 	read(sock, &buff[5], len);
+	buff[5 + len] = 0; /* We append a null term just incase we work with a string */
 	return unpack(buff, smsg);
 }

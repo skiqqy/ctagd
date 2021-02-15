@@ -24,5 +24,6 @@ main(int argc, char *argv[])
 
 	// Testing send.
 	create_smsg('1', "Hello, World!", &smsg);
+	printf("SENDING:%s\n", smsg.payload);
 	csend(sock, &smsg);
 }
