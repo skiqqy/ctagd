@@ -4,7 +4,41 @@
 
 #include "ctagd.h"
 
-static int max_clients;
+static struct server *server = NULL;
+static struct client *client = NULL;
+
+/* Init and open the server to allow clients to connect
+  
+ * struct server *s: The server Struct.
+  
+ */
+int
+init_server(struct server *s)
+{
+	server = s;
+	if (!server_open_socket(&s->server_fd, &s->address, OPT, s->port)) {
+		return 0;
+	}
+	return 1;
+}
+
+int
+init_client(struct client *c)
+{
+	client = c;
+	if (!client_get_sock(client->port, client->hostname, &client->socket, &client->address)) {
+		return 0;
+	}
+	return 1;
+}
+
+int
+server_accept()
+{
+	if (server == NULL) return -1;
+	int addrlen = sizeof(server->address);
+	return accept(server->server_fd, (struct sockaddr *) &server->address, (socklen_t *) &addrlen);
+}
 
 /* The master opens its socket to allow clients to communicate
   
@@ -17,7 +51,7 @@ static int max_clients;
 
 */
 int
-master_open_socket(int *sfd, struct sockaddr_in *address, int opt, int max, int port)
+server_open_socket(int *sfd, struct sockaddr_in *address, int opt, int port)
 {
 	if (!(*sfd = socket(AF_INET, SOCK_STREAM, 0))) {
 		perror("socket failed!");
@@ -37,8 +71,7 @@ master_open_socket(int *sfd, struct sockaddr_in *address, int opt, int max, int 
 		return 0;
 	}
 
-	max_clients = max;
-	if (listen(*sfd, max_clients) < 0) {
+	if (listen(*sfd, server->max_clients) < 0) {
 		perror("listen fail!");
 		return 0;
 	}
@@ -57,7 +90,7 @@ master_open_socket(int *sfd, struct sockaddr_in *address, int opt, int max, int 
   
  */
 int
-slave_get_sock(int port, char *host, int *sock, struct sockaddr_in *address)
+client_get_sock(int port, char *host, int *sock, struct sockaddr_in *address)
 {
 	struct hostent *server;
 	struct in_addr **list;

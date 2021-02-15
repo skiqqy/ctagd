@@ -6,24 +6,25 @@
 int
 main(int argc, char *argv[])
 {
-	int port = 8200, sock;
-	char *hostname = "localhost";
-	struct sockaddr_in address;
 	printf("[CLIENT] This is a demo!\n");
 
+	struct client client;
+	client.port = 8200;
+	client.hostname = "localhost";
+
 	/* Setup Sockets */
-	if (!slave_get_sock(port, hostname, &sock, &address)) {
+	if (!init_client(&client)) {
 		exit(1);
 	}
 
 	struct smsg smsg;
-	crecv(sock, &smsg);
+	crecv(client.socket, &smsg);
 	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n\n", smsg.tag, smsg.payload);
-	crecv(sock, &smsg);
+	crecv(client.socket, &smsg);
 	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n", smsg.tag, smsg.payload);
 
 	// Testing send.
 	create_smsg('1', "Hello, World!", &smsg);
 	printf("SENDING:%s\n", smsg.payload);
-	csend(sock, &smsg);
+	csend(client.socket, &smsg);
 }

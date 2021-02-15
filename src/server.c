@@ -7,17 +7,16 @@
 int
 main(int argc, char *argv[])
 {
-	int server_fd, client;
-	int port = 8200;
-	struct sockaddr_in address;
-	int addrlen = sizeof(address);
+	int client;
+	struct server server;
+	server.port = 8200;
+
 	printf("[SERVER] This is a demo!\n");
 
-	if (!master_open_socket(&server_fd, &address, OPT, 1, port)) {
+	if (!init_server(&server)) {
 		return EXIT_FAILURE;
 	}
-	client = accept(server_fd, (struct sockaddr *) &address, (socklen_t *) &addrlen);
-	printf("Server socket opened, port = %d\nserver_fd = %d\nAccepting Cons.\n", port, server_fd);
+	client = server_accept();
 
 	struct smsg smsg;
 	create_smsg('1', "Hello, World!", &smsg);

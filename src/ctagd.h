@@ -21,10 +21,34 @@ struct smsg {
 	char *payload;
 };
 
-int csend(int sock, struct smsg *smsg);
-int crecv(int sock, struct smsg *smsg);
-int master_open_socket(int *sfd, struct sockaddr_in *address, int opt, int max, int port);
-int slave_get_sock(int port, char *host, int *sock, struct sockaddr_in *address);
+struct server {
+	int server_fd;
+	int port;
+	int max_clients;
+	struct sockaddr_in address;
+};
+
+struct client {
+	int socket;
+	int port;
+	char *hostname;
+	struct sockaddr_in address;
+};
+
+/* Init */
+int init_server(struct server *server);
+int init_client(struct client *client);
+int server_open_socket(int *sfd, struct sockaddr_in *address, int opt, int port);
+int client_get_sock(int port, char *host, int *sock, struct sockaddr_in *address);
+
+/* Connection Establishment */
+int server_accept(); /* Server accepts client con */
+
+/* Message Building */
 char *pack(struct smsg *message);
 int unpack(char *bmsg, struct smsg *smsg);
 int create_smsg(char tag, char *msg, struct smsg *smsg);
+
+/* Message Passing */
+int csend(int sock, struct smsg *smsg);
+int crecv(int sock, struct smsg *smsg);
