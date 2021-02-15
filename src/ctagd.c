@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <pthread.h>
 
 #include "ctagd.h"
 
@@ -14,6 +15,8 @@ struct queue {
 static struct server *server = NULL;
 static struct client *client = NULL;
 static struct queue *queue[QUEUE_SIZE];
+static int *connected;
+static pthread_t *recv_pt; /* Each connected client gets thier own thread */
 
 /* Enqueue an smsg into a queue
   
@@ -29,6 +32,7 @@ enqueue(struct queue **q, struct smsg *smsg)
 	insert->smsg = smsg;
 	insert->next = NULL;
 
+	/* TODO: only lock the index that is being written to */
 	if (*q == NULL) {
 		*q = insert;
 	} else {
@@ -57,6 +61,34 @@ dequeue(struct queue **q)
 	return ret;
 }
 
+/* This thread recv's messages from a socket and puts them in thier appropraite
+ * queues.
+  
+ * void *s: index into connected array for socket fd.
+  
+ */
+void *
+recv_thread(void *s)
+{
+	struct smsg *smsg;
+	int id = *((int *) s);
+	
+	for(;;) {
+		/* TODO: Add locks */
+		while (connected[id] == -1) {}; /* While this thread has no connected client do nothing. */
+		smsg = malloc(sizeof(struct smsg));
+		if (!crecv(connected[id], smsg)) {
+			/* TODO: Lock this */
+			connected[id] = -1; /* Client disconnected */
+		}
+
+		/* TODO: Lock this */
+		enqueue(&queue[(int) smsg->tag], smsg); /* We enqueue the msg into its tagged q */
+	}
+
+	return 0;
+}
+
 /* Init and open the server to allow clients to connect
   
  * struct server *s: The server Struct.
@@ -73,6 +105,13 @@ init_server(struct server *s)
 	for (i = 0; i < QUEUE_SIZE; i++) {
 		queue[i] = NULL;
 	}
+
+	connected = malloc(sizeof(int)*s->max_clients);
+	recv_pt = malloc(sizeof(pthread_t)*s->max_clients);
+	for (i = 0; i < s->max_clients; i++) {
+		connected[i] = -1; /* Means the slot is free */
+	}
+
 	return 1;
 }
 
@@ -91,7 +130,18 @@ server_accept()
 {
 	if (server == NULL) return -1;
 	int addrlen = sizeof(server->address);
-	return accept(server->server_fd, (struct sockaddr *) &server->address, (socklen_t *) &addrlen);
+    int soc = accept(server->server_fd, (struct sockaddr *) &server->address, (socklen_t *) &addrlen);
+	int i;
+	
+	/* TODO: Add locks */
+	for (i = 0; i < server->max_clients; i++) {
+		if (connected[i] == -1) {
+			connected[i] = soc;
+			break;
+		}
+	}
+
+	return soc;
 }
 
 /* The master opens its socket to allow clients to communicate
