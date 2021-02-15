@@ -24,4 +24,8 @@ main(int argc, char *argv[])
 	csend(client, &smsg);
 	create_smsg('2', "Second Message :D", &smsg);
 	csend(client, &smsg);
+
+	// Testing recv
+	crecv(client, &smsg);
+	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n", smsg.tag, smsg.payload);
 }

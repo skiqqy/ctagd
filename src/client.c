@@ -21,4 +21,8 @@ main(int argc, char *argv[])
 	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n\n", smsg.tag, smsg.payload);
 	crecv(sock, &smsg);
 	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n", smsg.tag, smsg.payload);
+
+	// Testing send.
+	create_smsg('1', "Hello, World!", &smsg);
+	csend(sock, &smsg);
 }
