@@ -11,7 +11,7 @@
 #include <errno.h>
 #include <signal.h>
 
-#define VERSION 0.1
+#define VERSION 1.0
 #define OPT 1
 
 /* Tagged message struct */

@@ -17,6 +17,9 @@ build: init ctagd.o
 ctagd.o: src/ctagd.c
 	$(COMP) -c $< -o bin/$@
 
+lib: build
+	ar rcs bin/ctagd.a bin/ctagd.o
+
 # The following two units are just for testing
 
 test: build server client
