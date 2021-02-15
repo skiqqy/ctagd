@@ -4,8 +4,58 @@
 
 #include "ctagd.h"
 
+#define QUEUE_SIZE 256
+
+struct queue {
+	struct smsg *smsg;
+	struct queue *next;
+};
+
 static struct server *server = NULL;
 static struct client *client = NULL;
+static struct queue *queue[QUEUE_SIZE];
+
+/* Enqueue an smsg into a queue
+  
+ * struct queue **q: The queue we are adding too.
+ * struct smsg *smsg: The smsg we are adding.
+  
+ */
+void
+enqueue(struct queue **q, struct smsg *smsg)
+{
+	struct queue *insert = malloc(sizeof(struct queue));
+	struct queue *t = *q;
+	insert->smsg = smsg;
+	insert->next = NULL;
+
+	if (*q == NULL) {
+		*q = insert;
+	} else {
+		while (t->next != NULL) {
+			t = t->next;
+		}
+		t->next = insert; /* insert at the end of the q */
+	}
+}
+
+/* Dequeue an smsg from a q.
+  
+ * struct queue **q: The queue we are removing from.
+ * return struct smsg *: A pointer to the smsg, null if the queue is empty.
+  
+ */
+struct smsg *
+dequeue(struct queue **q)
+{
+	struct smsg *ret;
+	if (*q == NULL) return NULL; /* Empty q */
+
+	ret = (*q)->smsg;
+	*q = (*q)->next;
+
+	return ret;
+}
 
 /* Init and open the server to allow clients to connect
   
@@ -15,9 +65,13 @@ static struct client *client = NULL;
 int
 init_server(struct server *s)
 {
+	int i;
 	server = s;
 	if (!server_open_socket(&s->server_fd, &s->address, OPT, s->port)) {
 		return 0;
+	}
+	for (i = 0; i < QUEUE_SIZE; i++) {
+		queue[i] = NULL;
 	}
 	return 1;
 }
