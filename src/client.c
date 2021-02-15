@@ -8,7 +8,6 @@ main(int argc, char *argv[])
 {
 	int port = 8200, sock;
 	char *hostname = "localhost";
-	char buff[256];
 	struct sockaddr_in address;
 	printf("[CLIENT] This is a demo!\n");
 
@@ -17,7 +16,9 @@ main(int argc, char *argv[])
 		exit(1);
 	}
 
-	read(sock, buff, 256); /* TODO: Figure out how to get rid of this length cap */
-	struct smsg *smsg = unpack(buff);
-	printf("RECIEVE MSG: %s\n", smsg->payload);
+	struct smsg smsg;
+	crecv(sock, &smsg);
+	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n\n", smsg.tag, smsg.payload);
+	crecv(sock, &smsg);
+	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n", smsg.tag, smsg.payload);
 }

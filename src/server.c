@@ -19,9 +19,9 @@ main(int argc, char *argv[])
 	client = accept(server_fd, (struct sockaddr *) &address, (socklen_t *) &addrlen);
 	printf("Server socket opened, port = %d\nserver_fd = %d\nAccepting Cons.\n", port, server_fd);
 
-	char *msg = "Hello, World!";
-	char *bmsg = pack(create_smsg('t', msg));
-	printf("Sending message: %s\n", msg);
-	printf("strln(bmsg) = %d\n", strlen(bmsg));
-	send(client, bmsg, 5 + strlen(msg), 0);
+	struct smsg smsg;
+	create_smsg('1', "Hello, World!", &smsg);
+	csend(client, &smsg);
+	create_smsg('2', "Second Message :D", &smsg);
+	csend(client, &smsg);
 }

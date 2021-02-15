@@ -6,18 +6,6 @@
 
 static int max_clients;
 
-/* I didnt feel like working with bytes, leave me alone owo */
-static int base_10(int n)
-{
-	int c = 0;
-	while (n > 0) {
-		n /= 10;
-		c++;
-	}
-
-	return c;
-}
-
 /* The master opens its socket to allow clients to communicate
   
  * int *sfd: Socket File Descriptor.
@@ -25,7 +13,8 @@ static int base_10(int n)
  * int opt: The option value.
  * int max: Max client connections.
  * int port: The port we are opening.
-  
+ * return: 1 for success, 0 for fail.
+
 */
 int
 master_open_socket(int *sfd, struct sockaddr_in *address, int opt, int max, int port)
@@ -58,6 +47,15 @@ master_open_socket(int *sfd, struct sockaddr_in *address, int opt, int max, int 
 	return 1;
 }
 
+/* Connect the client to the server and get a socket fd.
+  
+ * int port: The port we are connecting to.
+ * char *host: Hostname of the server.
+ * int *sock: pointer to where we will store the socket fd.
+ * struct sockaddr_in *address: Address socket.
+ * return: 1 for success, 0 for fail.
+  
+ */
 int
 slave_get_sock(int port, char *host, int *sock, struct sockaddr_in *address)
 {
@@ -98,19 +96,28 @@ slave_get_sock(int port, char *host, int *sock, struct sockaddr_in *address)
 	return 1;
 }
 
-struct smsg *
-create_smsg(char tag, char *msg)
+/* Take a tag and a message and pack it into an smsg
+  
+ * char tag: The tag for the message.
+ * char *msg: the msg.
+ * return: 1 for success, 0 for fail.
+  
+ */
+int
+create_smsg(char tag, char *msg, struct smsg *smsg)
 {
-	if (msg == NULL) return NULL;
-	struct smsg *smsg = malloc(sizeof(struct smsg));
+	if (msg == NULL) return 0;
 	smsg->tag = tag;
 	smsg->len = strlen(msg);
 	smsg->payload = msg;
-	return smsg;
+	return 1;
 }
 
 /* Convert an smsg to a byte array (bmsg).
+  
  * struct smsg: Convert the smsg (Struct message) into a bmsg (a byte array)
+ * return: 1 for success, 0 for fail.
+  
  */
 char *
 pack(struct smsg *msg)
@@ -127,25 +134,61 @@ pack(struct smsg *msg)
 	}
 	sprintf(&bmsg[5], "%s", msg->payload);
 
-	printf("\nPACKING DONE\nTAG = |%c|\nLEN = |%d|\nPAYLOAD = |%s|\n\n", bmsg[0], *(int *) &bmsg[1], &bmsg[5]);
 	return bmsg;
 }
 
 /* Convert a byte array message to a struct message (smsg)
+  
  * char *bmsg: The byte array message we are converting.
+ * return: 1 for success, 0 for fail.
+  
  */
-struct smsg *
-unpack(char *bmsg)
+int
+unpack(char *bmsg, struct smsg *smsg)
 {
-	if (bmsg == NULL) return NULL;
+	if (bmsg == NULL) return 0;
 
-	struct smsg *smsg = malloc(sizeof(struct smsg));
 	smsg->tag = bmsg[0];
-	printf("??%s\n", &bmsg[5]);
 	smsg->len = *(int *)&bmsg[1];
-	printf("TAG=%c\nLEN=%d\n", smsg->tag, smsg->len);
 	smsg->payload = malloc(sizeof(char)*smsg->len);
 	sprintf(smsg->payload, "%s", &bmsg[5]);
 
-	return smsg;
+	return 1;
+}
+
+/* Send a smsg over a socket.
+  
+ * int sock: The socket we are sending over.
+ * struct smsg *smsg: Pointer to the smsg we are sending.
+ * return: 1 for success, 0 for fail.
+  
+ */
+int
+csend(int sock, struct smsg *smsg)
+{
+	char *bmsg = pack(smsg);
+	if (bmsg == NULL) return 0;
+
+	send(sock, bmsg, 5 + smsg->len, 0);
+	free(bmsg); /* This might cause a seggy */
+
+	return 1;
+}
+
+/* Read a smsg from a socket.
+  
+ * int sock: The socket we are reading from.
+ * struct smsg *smsg: Pointer to the smsg we are stroing the message in.
+ * return: 1 for success, 0 for fail.
+  
+ */
+int
+crecv(int sock, struct smsg *smsg)
+{
+	char *buff = malloc(sizeof(char)*5);
+	read(sock, buff, 5);
+	int len = *(int *) &buff[1];
+	buff = realloc(buff, sizeof(char)*len + 5);
+	read(sock, &buff[5], len);
+	return unpack(buff, smsg);
 }

@@ -21,8 +21,10 @@ struct smsg {
 	char *payload;
 };
 
+int csend(int sock, struct smsg *smsg);
+int crecv(int sock, struct smsg *smsg);
 int master_open_socket(int *sfd, struct sockaddr_in *address, int opt, int max, int port);
 int slave_get_sock(int port, char *host, int *sock, struct sockaddr_in *address);
 char *pack(struct smsg *message);
-struct smsg *unpack(char *bmsg);
-struct smsg *create_smsg(char tag, char *msg);
+int unpack(char *bmsg, struct smsg *smsg);
+int create_smsg(char tag, char *msg, struct smsg *smsg);
