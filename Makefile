@@ -4,18 +4,23 @@ VERSION=0.1
 NAME=ctagd
 COMP=$(CC) $(FLAGS)
 
-all: build ctagd.o server client
+all: build
 
 clean:
 	rm -rf bin
 
-build:
+init:
 	mkdir -p bin
+
+build: init ctagd.o
 
 ctagd.o: src/ctagd.c
 	$(COMP) -c $< -o bin/$@
 
 # The following two units are just for testing
+
+test: build server client
+	./test.sh
 
 server: ctagd.o
 	$(COMP) -o bin/$@ src/server.c bin/ctagd.o
