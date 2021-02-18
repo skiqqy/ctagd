@@ -10,6 +10,7 @@ main(int argc, char *argv[])
 	int client;
 	struct server server;
 	server.port = 8200;
+	server.max_clients = 1;
 
 	printf("[SERVER] This is a demo!\n");
 
@@ -18,13 +19,17 @@ main(int argc, char *argv[])
 	}
 	client = server_accept();
 
-	struct smsg smsg;
-	create_smsg('1', "Hello, World!", &smsg);
-	csend(client, &smsg);
-	create_smsg('2', "Second Message :D", &smsg);
-	csend(client, &smsg);
+	struct smsg *smsg = malloc(sizeof(struct smsg));
+	create_smsg('1', "Hello, World!", smsg);
+	csend(client, smsg);
+	create_smsg('2', "Second Message :D", smsg);
+	csend(client, smsg);
+	free(smsg);
 
-	// Testing recv
-	crecv(client, &smsg);
-	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n", smsg.tag, smsg.payload);
+	/* Test recv */
+	smsg = NULL;
+	while (smsg == NULL) {
+		smsg = recv_tag('1');
+	}
+	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n", smsg->tag, smsg->payload);
 }

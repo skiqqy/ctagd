@@ -17,14 +17,20 @@ main(int argc, char *argv[])
 		exit(1);
 	}
 
-	struct smsg smsg;
-	crecv(client.socket, &smsg);
-	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n\n", smsg.tag, smsg.payload);
-	crecv(client.socket, &smsg);
-	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n", smsg.tag, smsg.payload);
+	struct smsg *smsg = NULL;
+	while (smsg == NULL) {
+		smsg = recv_tag('2');
+	}
+	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n", smsg->tag, smsg->payload);
+	smsg = NULL;
+	while (smsg == NULL) {
+		smsg = recv_tag('1');
+	}
+	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n", smsg->tag, smsg->payload);
 
-	// Testing send.
-	create_smsg('1', "Hello, World!", &smsg);
-	printf("SENDING:%s\n", smsg.payload);
-	csend(client.socket, &smsg);
+	/* Send a message to server */
+	smsg = malloc(sizeof(struct smsg));
+	create_smsg('1', "This is a response from the client!", smsg);
+	csend(client.socket, smsg);
+	free(smsg);
 }

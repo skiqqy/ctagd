@@ -51,4 +51,5 @@ int create_smsg(char tag, char *msg, struct smsg *smsg);
 
 /* Message Passing */
 int csend(int sock, struct smsg *smsg);
-int crecv(int sock, struct smsg *smsg);
+int crecv(int sock, struct smsg *smsg);  /* TODO: Make private */
+struct smsg * recv_tag(char tag); /* This is used to recv messages */

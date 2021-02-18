@@ -17,6 +17,8 @@ static struct client *client = NULL;
 static struct queue *queue[QUEUE_SIZE];
 static int *connected;
 static pthread_t *recv_pt; /* Each connected client gets thier own thread */
+static pthread_mutex_t queue_locks[QUEUE_SIZE]; /* Locks for the threads */
+static pthread_mutex_t *connect_locks;
 
 /* Enqueue an smsg into a queue
   
@@ -61,6 +63,22 @@ dequeue(struct queue **q)
 	return ret;
 }
 
+/* Fetch a smsg from a queue with a specifc tag. This is thread safe.
+  
+ * char tag: The tag representing the queue we are taking the smsg from.
+ * returns: Null if the queue is empty, else the smsg at the front of the queue.
+  
+ */
+struct smsg *
+recv_tag(char tag)
+{
+	struct smsg *smsg;
+	pthread_mutex_lock(&queue_locks[(int) tag]);
+	smsg = dequeue(&queue[(int) tag]);
+	pthread_mutex_unlock(&queue_locks[(int) tag]);
+	return smsg;
+}
+
 /* This thread recv's messages from a socket and puts them in thier appropraite
  * queues.
   
@@ -68,25 +86,51 @@ dequeue(struct queue **q)
   
  */
 void *
-recv_thread(void *s)
+server_recv_thread(void *s)
 {
 	struct smsg *smsg;
 	int id = *((int *) s);
 	
 	for(;;) {
-		/* TODO: Add locks */
 		while (connected[id] == -1) {}; /* While this thread has no connected client do nothing. */
+
 		smsg = malloc(sizeof(struct smsg));
 		if (!crecv(connected[id], smsg)) {
-			/* TODO: Lock this */
+			pthread_mutex_lock(&connect_locks[id]);
+			/* Critical Section */
 			connected[id] = -1; /* Client disconnected */
+			/* End Critical Section */
+			pthread_mutex_unlock(&connect_locks[id]);
+			free(smsg);
+			continue;
 		}
 
-		/* TODO: Lock this */
+		pthread_mutex_lock(&queue_locks[(int) smsg->tag]);
+		/* Critical Section */
 		enqueue(&queue[(int) smsg->tag], smsg); /* We enqueue the msg into its tagged q */
+		/* End Critical Section */
+		pthread_mutex_unlock(&queue_locks[(int) smsg->tag]);
 	}
 
-	return 0;
+	return NULL;
+}
+
+void *
+client_recv_thread(void *arg)
+{
+	struct smsg *smsg;
+	int fd = *((int *) arg);
+	for (;;) {
+		smsg = malloc(sizeof(struct smsg));
+		crecv(fd, smsg); /* WARNING, PIPE CAN BREAK */
+
+		pthread_mutex_lock(&queue_locks[(int) smsg->tag]);
+		/* Critical Section */
+		enqueue(&queue[(int) smsg->tag], smsg); /* We enqueue the msg into its tagged q */
+		/* End Critical Section */
+		pthread_mutex_unlock(&queue_locks[(int) smsg->tag]);
+	}
+	return NULL;
 }
 
 /* Init and open the server to allow clients to connect
@@ -97,19 +141,30 @@ recv_thread(void *s)
 int
 init_server(struct server *s)
 {
-	int i;
+	int i, arg;
 	server = s;
 	if (!server_open_socket(&s->server_fd, &s->address, OPT, s->port)) {
 		return 0;
 	}
+
 	for (i = 0; i < QUEUE_SIZE; i++) {
 		queue[i] = NULL;
+		pthread_mutex_init(&queue_locks[i], NULL); /* Init the locks */
 	}
 
 	connected = malloc(sizeof(int)*s->max_clients);
-	recv_pt = malloc(sizeof(pthread_t)*s->max_clients);
+	connect_locks = malloc(sizeof(pthread_mutex_t)*s->max_clients);
+	recv_pt = malloc(sizeof(pthread_t)*s->max_clients); /* Threads for recv */
 	for (i = 0; i < s->max_clients; i++) {
 		connected[i] = -1; /* Means the slot is free */
+		pthread_mutex_init(&connect_locks[i], NULL); /* Init the locks */
+	}
+
+	/* Start the threads, doing it in a seperate loop as all the mutexes need to
+	be initialised */
+	for (i = 0; i < s->max_clients; i++) {
+		arg = i;
+		pthread_create(&recv_pt[i], NULL, server_recv_thread, (void *) &arg);
 	}
 
 	return 1;
@@ -118,10 +173,20 @@ init_server(struct server *s)
 int
 init_client(struct client *c)
 {
+	int i;
 	client = c;
+	recv_pt = malloc(sizeof(pthread_t));
 	if (!client_get_sock(client->port, client->hostname, &client->socket, &client->address)) {
 		return 0;
 	}
+
+	for (i = 0; i < QUEUE_SIZE; i++) {
+		queue[i] = NULL;
+		pthread_mutex_init(&queue_locks[i], NULL); /* Init the locks */
+	}
+
+	pthread_create(recv_pt, NULL, client_recv_thread, (void *) &client->socket);
+
 	return 1;
 }
 
@@ -133,10 +198,12 @@ server_accept()
     int soc = accept(server->server_fd, (struct sockaddr *) &server->address, (socklen_t *) &addrlen);
 	int i;
 	
-	/* TODO: Add locks */
 	for (i = 0; i < server->max_clients; i++) {
 		if (connected[i] == -1) {
+			/* CRITICAL SECTION */
+			pthread_mutex_lock(&connect_locks[i]);
 			connected[i] = soc;
+			pthread_mutex_unlock(&connect_locks[i]);
 			break;
 		}
 	}

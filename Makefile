@@ -1,10 +1,10 @@
 CC=gcc
-FLAGS=-Wall -Wno-variadic-macros -Wno-overlength-strings -pedantic
+FLAGS=-Wall -Wno-variadic-macros -Wno-overlength-strings -pedantic -lpthread
 VERSION=0.1
 NAME=ctagd
 COMP=$(CC) $(FLAGS)
 
-all: build
+all: build server client
 
 clean:
 	rm -rf bin
@@ -15,7 +15,7 @@ init:
 build: init ctagd.o
 
 ctagd.o: src/ctagd.c
-	$(COMP) -c $< -o bin/$@
+	$(COMP) -lpthread -c $< -o bin/$@
 
 lib: build
 	ar rcs bin/ctagd.a bin/ctagd.o
