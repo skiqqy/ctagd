@@ -6,6 +6,9 @@
 #include "ctagd.h"
 
 #define QUEUE_SIZE 256
+#define DEFUALT_PORT 8200
+#define DEFAULT_CLIENT_COUNT 4
+#define DEFAULT_QUEUE_STATUS 1
 
 struct queue {
 	struct smsg *smsg;
@@ -20,11 +23,14 @@ static pthread_t *recv_pt; /* Each connected client gets thier own thread */
 static pthread_mutex_t queue_locks[QUEUE_SIZE]; /* Locks for the threads */
 static pthread_mutex_t *connect_locks;
 
+/* Needed Prototypes */
+int crecv(int sock, struct smsg *smsg);
+
 /* Enqueue an smsg into a queue
-  
+
  * struct queue **q: The queue we are adding too.
  * struct smsg *smsg: The smsg we are adding.
-  
+
  */
 void
 enqueue(struct queue **q, struct smsg *smsg)
@@ -46,10 +52,10 @@ enqueue(struct queue **q, struct smsg *smsg)
 }
 
 /* Dequeue an smsg from a q.
-  
+
  * struct queue **q: The queue we are removing from.
  * return struct smsg *: A pointer to the smsg, null if the queue is empty.
-  
+
  */
 struct smsg *
 dequeue(struct queue **q)
@@ -63,27 +69,29 @@ dequeue(struct queue **q)
 	return ret;
 }
 
-/* Fetch a smsg from a queue with a specifc tag. This is thread safe.
-  
+/* Fetch a smsg from a queue with a specifc tag. This is thread safe and blocking.
+
  * char tag: The tag representing the queue we are taking the smsg from.
  * returns: Null if the queue is empty, else the smsg at the front of the queue.
-  
+
  */
 struct smsg *
 recv_tag(char tag)
 {
-	struct smsg *smsg;
-	pthread_mutex_lock(&queue_locks[(int) tag]);
-	smsg = dequeue(&queue[(int) tag]);
-	pthread_mutex_unlock(&queue_locks[(int) tag]);
+	struct smsg *smsg = NULL;
+	do {
+		pthread_mutex_lock(&queue_locks[(int) tag]);
+		smsg = dequeue(&queue[(int) tag]);
+		pthread_mutex_unlock(&queue_locks[(int) tag]);
+	} while (!smsg);
 	return smsg;
 }
 
 /* This thread recv's messages from a socket and puts them in thier appropraite
  * queues.
-  
+
  * void *s: index into connected array for socket fd.
-  
+
  */
 void *
 server_recv_thread(void *s)
@@ -133,10 +141,29 @@ client_recv_thread(void *arg)
 	return NULL;
 }
 
+/* Set a server struct to the default values. */
+void
+init_server_struct(struct server *server)
+{
+	server->server_fd = -1;
+	server->port = DEFUALT_PORT;
+	server->max_clients = DEFAULT_CLIENT_COUNT;
+	server->enable_q = DEFAULT_QUEUE_STATUS;
+}
+
+void
+init_client_struct(struct client *client)
+{
+	client->socket = -1;
+	client->port = DEFUALT_PORT;
+	client->hostname = "localhost";
+	client->enable_q = DEFAULT_QUEUE_STATUS;
+}
+
 /* Init and open the server to allow clients to connect
-  
+
  * struct server *s: The server Struct.
-  
+
  */
 int
 init_server(struct server *s)
@@ -153,18 +180,24 @@ init_server(struct server *s)
 	}
 
 	connected = malloc(sizeof(int)*s->max_clients);
-	connect_locks = malloc(sizeof(pthread_mutex_t)*s->max_clients);
-	recv_pt = malloc(sizeof(pthread_t)*s->max_clients); /* Threads for recv */
 	for (i = 0; i < s->max_clients; i++) {
 		connected[i] = -1; /* Means the slot is free */
-		pthread_mutex_init(&connect_locks[i], NULL); /* Init the locks */
 	}
 
-	/* Start the threads, doing it in a seperate loop as all the mutexes need to
-	be initialised */
-	for (i = 0; i < s->max_clients; i++) {
-		arg = i;
-		pthread_create(&recv_pt[i], NULL, server_recv_thread, (void *) &arg);
+	if (s->enable_q) {
+		/* Yes these loops must be seperate */
+		connect_locks = malloc(sizeof(pthread_mutex_t)*s->max_clients);
+		recv_pt = malloc(sizeof(pthread_t)*s->max_clients); /* Threads for recv */
+		for (i = 0; i < s->max_clients; i++) {
+			pthread_mutex_init(&connect_locks[i], NULL); /* Init the locks */
+		}
+
+		/* Start the threads, doing it in a seperate loop as all the mutexes need to
+		be initialised */
+		for (i = 0; i < s->max_clients; i++) {
+			arg = i;
+			pthread_create(&recv_pt[i], NULL, server_recv_thread, (void *) &arg); /* Spawn our threads */
+		}
 	}
 
 	return 1;
@@ -182,10 +215,15 @@ init_client(struct client *c)
 
 	for (i = 0; i < QUEUE_SIZE; i++) {
 		queue[i] = NULL;
-		pthread_mutex_init(&queue_locks[i], NULL); /* Init the locks */
 	}
 
-	pthread_create(recv_pt, NULL, client_recv_thread, (void *) &client->socket);
+	if (c->enable_q) {
+		for (i = 0; i < QUEUE_SIZE; i++) {
+			pthread_mutex_init(&queue_locks[i], NULL); /* Init the locks */
+		}
+
+		pthread_create(recv_pt, NULL, client_recv_thread, (void *) &client->socket);
+	}
 
 	return 1;
 }
@@ -201,9 +239,9 @@ server_accept()
 	for (i = 0; i < server->max_clients; i++) {
 		if (connected[i] == -1) {
 			/* CRITICAL SECTION */
-			pthread_mutex_lock(&connect_locks[i]);
+			if (server->enable_q) pthread_mutex_lock(&connect_locks[i]);
 			connected[i] = soc;
-			pthread_mutex_unlock(&connect_locks[i]);
+			if (server->enable_q) pthread_mutex_unlock(&connect_locks[i]);
 			break;
 		}
 	}
@@ -212,7 +250,7 @@ server_accept()
 }
 
 /* The master opens its socket to allow clients to communicate
-  
+
  * int *sfd: Socket File Descriptor.
  * struct sockaddr_in *address: Pointer to address struct.
  * int opt: The option value.
@@ -252,13 +290,13 @@ server_open_socket(int *sfd, struct sockaddr_in *address, int opt, int port)
 }
 
 /* Connect the client to the server and get a socket fd.
-  
+
  * int port: The port we are connecting to.
  * char *host: Hostname of the server.
  * int *sock: pointer to where we will store the socket fd.
  * struct sockaddr_in *address: Address socket.
  * return: 1 for success, 0 for fail.
-  
+
  */
 int
 client_get_sock(int port, char *host, int *sock, struct sockaddr_in *address)
@@ -301,11 +339,11 @@ client_get_sock(int port, char *host, int *sock, struct sockaddr_in *address)
 }
 
 /* Take a tag and a message and pack it into an smsg
-  
+
  * char tag: The tag for the message.
  * char *msg: the msg.
  * return: 1 for success, 0 for fail.
-  
+
  */
 int
 create_smsg(char tag, char *msg, struct smsg *smsg)
@@ -318,10 +356,10 @@ create_smsg(char tag, char *msg, struct smsg *smsg)
 }
 
 /* Convert an smsg to a byte array (bmsg).
-  
+
  * struct smsg: Convert the smsg (Struct message) into a bmsg (a byte array)
  * return: 1 for success, 0 for fail.
-  
+
  */
 char *
 pack(struct smsg *msg)
@@ -342,10 +380,10 @@ pack(struct smsg *msg)
 }
 
 /* Convert a byte array message to a struct message (smsg)
-  
+
  * char *bmsg: The byte array message we are converting.
  * return: 1 for success, 0 for fail.
-  
+
  */
 int
 unpack(char *bmsg, struct smsg *smsg)
@@ -361,11 +399,11 @@ unpack(char *bmsg, struct smsg *smsg)
 }
 
 /* Send a smsg over a socket.
-  
+ 
  * int sock: The socket we are sending over.
  * struct smsg *smsg: Pointer to the smsg we are sending.
  * return: 1 for success, 0 for fail.
-  
+
  */
 int
 csend(int sock, struct smsg *smsg)
@@ -380,11 +418,11 @@ csend(int sock, struct smsg *smsg)
 }
 
 /* Read a smsg from a socket.
-  
+ 
  * int sock: The socket we are reading from.
  * struct smsg *smsg: Pointer to the smsg we are stroing the message in.
  * return: 1 for success, 0 for fail.
-  
+ 
  */
 int
 crecv(int sock, struct smsg *smsg)
@@ -396,4 +434,20 @@ crecv(int sock, struct smsg *smsg)
 	read(sock, &buff[5], len);
 	buff[5 + len] = 0; /* We append a null term just incase we work with a string */
 	return unpack(buff, smsg);
+}
+
+/* Read a smsg from a socket, if queues are disabled.
+
+ * int sock: The socket we are reading from.
+ * struct smsg *smsg: Pointer to the smsg we are stroing the message in.
+ * return: 1 for success, 0 for fail.
+
+ */
+int
+cfetch(int sock, struct smsg *smsg)
+{
+	if (server && server->enable_q) return 0; /* We have a queue running, this operation is unsafe */
+	if (client && client ->enable_q) return 0; /* We have a queue running, this operation is unsafe */
+	printf("here\n");
+	return crecv(sock, smsg);
 }

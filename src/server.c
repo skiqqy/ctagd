@@ -9,10 +9,10 @@ main(int argc, char *argv[])
 {
 	int client;
 	struct server server;
-	server.port = 8200;
-	server.max_clients = 1;
-
 	printf("[SERVER] This is a demo!\n");
+	init_server_struct(&server);
+	server.max_clients = 1;
+	server.enable_q = 1; /* change this to 0 to not use queues */
 
 	if (!init_server(&server)) {
 		return EXIT_FAILURE;
@@ -24,12 +24,14 @@ main(int argc, char *argv[])
 	csend(client, smsg);
 	create_smsg('2', "Second Message :D", smsg);
 	csend(client, smsg);
-	free(smsg);
 
 	/* Test recv */
-	smsg = NULL;
-	while (smsg == NULL) {
+	if (server.enable_q) { /* Use the queue */
+		free(smsg);
 		smsg = recv_tag('1');
+	} else {
+		cfetch(client, smsg); /* Read the first smsg available from the socket */
 	}
 	printf("RECIEVE MSG\nTag:%c\nMessage:%s\n", smsg->tag, smsg->payload);
+	free(smsg);
 }

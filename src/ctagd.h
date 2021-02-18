@@ -25,6 +25,7 @@ struct server {
 	int server_fd;
 	int port;
 	int max_clients;
+	int enable_q;
 	struct sockaddr_in address;
 };
 
@@ -32,10 +33,13 @@ struct client {
 	int socket;
 	int port;
 	char *hostname;
+	int enable_q;
 	struct sockaddr_in address;
 };
 
 /* Init */
+void init_server_struct(struct server *server);
+void init_client_struct(struct client *client);
 int init_server(struct server *server);
 int init_client(struct client *client);
 int server_open_socket(int *sfd, struct sockaddr_in *address, int opt, int port);
@@ -51,5 +55,5 @@ int create_smsg(char tag, char *msg, struct smsg *smsg);
 
 /* Message Passing */
 int csend(int sock, struct smsg *smsg);
-int crecv(int sock, struct smsg *smsg);  /* TODO: Make private */
+int cfetch(int sock, struct smsg *smsg);
 struct smsg * recv_tag(char tag); /* This is used to recv messages */
